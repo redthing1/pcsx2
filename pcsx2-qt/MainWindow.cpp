@@ -409,6 +409,7 @@ void MainWindow::connectSignals()
 	connect(m_ui.actionShowAdvancedSettings, &QAction::toggled, this, &MainWindow::onShowAdvancedSettingsToggled);
 	connect(m_ui.actionSaveGSDump, &QAction::triggered, this, &MainWindow::onSaveGSDumpActionTriggered);
 	connect(m_ui.actionVideoCapture, &QAction::toggled, this, &MainWindow::onVideoCaptureToggled);
+	connect(m_ui.actionEECoverageCollection, &QAction::toggled, this, &MainWindow::onEECoverageCollectionToggled);
 	connect(m_ui.actionEditPatches, &QAction::triggered, this, [this]() { onToolsEditCheatsPatchesTriggered(false); });
 	connect(m_ui.actionEditCheats, &QAction::triggered, this, [this]() { onToolsEditCheatsPatchesTriggered(true); });
 
@@ -449,6 +450,7 @@ void MainWindow::connectVMThreadSignals(EmuThread* thread)
 	connect(thread, &EmuThread::onGameChanged, this, &MainWindow::onGameChanged);
 	connect(thread, &EmuThread::onCaptureStarted, this, &MainWindow::onCaptureStarted);
 	connect(thread, &EmuThread::onCaptureStopped, this, &MainWindow::onCaptureStopped);
+	connect(thread, &EmuThread::onEECoverageCollectionStateChanged, this, &MainWindow::onEECoverageCollectionStateChanged);
 	connect(thread, &EmuThread::onAchievementsLoginRequested, this, &MainWindow::onAchievementsLoginRequested);
 	connect(thread, &EmuThread::onAchievementsHardcoreModeChanged, this, &MainWindow::onAchievementsHardcoreModeChanged);
 	connect(thread, &EmuThread::onCoverDownloaderOpenRequested, this, &MainWindow::onToolsCoverDownloaderTriggered);
@@ -790,6 +792,21 @@ void MainWindow::onVideoCaptureToggled(bool checked)
 	}
 }
 
+void MainWindow::onEECoverageCollectionToggled(bool checked)
+{
+	// Reset checked state; we only update it after the CPU thread reports the result.
+	QSignalBlocker sb(m_ui.actionEECoverageCollection);
+	m_ui.actionEECoverageCollection->setChecked(!checked);
+
+	if (!s_vm_valid)
+		return;
+
+	if (checked)
+		g_emu_thread->startEECoverageCollection();
+	else
+		g_emu_thread->stopEECoverageCollection();
+}
+
 void MainWindow::onCaptureStarted(const QString& filename)
 {
 	if (!s_vm_valid)
@@ -806,6 +823,16 @@ void MainWindow::onCaptureStopped()
 
 	QSignalBlocker sb(m_ui.actionVideoCapture);
 	m_ui.actionVideoCapture->setChecked(false);
+}
+
+void MainWindow::onEECoverageCollectionStateChanged(bool active, const QString& filename)
+{
+	QSignalBlocker sb(m_ui.actionEECoverageCollection);
+	m_ui.actionEECoverageCollection->setChecked(active);
+	m_ui.actionEECoverageCollection->setText(active ? tr("Stop Coverage") : tr("Start Coverage"));
+
+	if (!filename.isEmpty())
+		onStatusMessage(tr("Coverage saved to %1").arg(QDir::toNativeSeparators(filename)));
 }
 
 void MainWindow::onAchievementsLoginRequested(Achievements::LoginRequestReason reason)
@@ -922,6 +949,7 @@ void MainWindow::updateEmulationActions(bool starting, bool running, bool stoppi
 	m_ui.menuLoadState->setEnabled(running && !Achievements::IsHardcoreModeActive());
 	m_ui.menuSaveState->setEnabled(running);
 	m_ui.actionSaveGSDump->setEnabled(running);
+	m_ui.actionEECoverageCollection->setEnabled(running);
 
 	m_ui.actionToolbarPowerOff->setEnabled(running);
 	m_ui.actionToolbarReset->setEnabled(running);
@@ -937,6 +965,13 @@ void MainWindow::updateEmulationActions(bool starting, bool running, bool stoppi
 		QSignalBlocker sb(m_ui.actionVideoCapture);
 		m_ui.actionVideoCapture->setChecked(false);
 	}
+	if (!running && m_ui.actionEECoverageCollection->isChecked())
+	{
+		QSignalBlocker sb(m_ui.actionEECoverageCollection);
+		m_ui.actionEECoverageCollection->setChecked(false);
+	}
+	if (!running)
+		m_ui.actionEECoverageCollection->setText(tr("Start Coverage"));
 
 	m_game_list_widget->setDisabled(starting && !running);
 

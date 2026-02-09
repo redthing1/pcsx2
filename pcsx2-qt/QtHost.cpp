@@ -884,6 +884,32 @@ void EmuThread::endCapture()
 	MTGS::RunOnGSThread(&GSEndCapture);
 }
 
+void EmuThread::startEECoverageCollection()
+{
+	if (!isOnEmuThread())
+	{
+		QMetaObject::invokeMethod(this, &EmuThread::startEECoverageCollection, Qt::QueuedConnection);
+		return;
+	}
+
+	const bool active = VMManager::StartEECoverageCollection();
+	emit onEECoverageCollectionStateChanged(active, QString());
+}
+
+void EmuThread::stopEECoverageCollection()
+{
+	if (!isOnEmuThread())
+	{
+		QMetaObject::invokeMethod(this, &EmuThread::stopEECoverageCollection, Qt::QueuedConnection);
+		return;
+	}
+
+	std::string filename;
+	const bool stopped = VMManager::StopEECoverageCollection(&filename);
+	const bool active = stopped ? false : VMManager::IsEECoverageCollectionActive();
+	emit onEECoverageCollectionStateChanged(active, QString::fromStdString(filename));
+}
+
 std::optional<WindowInfo> EmuThread::acquireRenderWindow(bool recreate_window)
 {
 	// Check if we're wanting to get exclusive fullscreen. This should be safe to read, since we're going to be calling from the GS thread.

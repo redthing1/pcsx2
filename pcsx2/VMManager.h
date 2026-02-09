@@ -262,6 +262,20 @@ namespace VMManager
 	/// Returns the time elapsed in the current play session.
 	u64 GetSessionPlayedTime();
 
+	/// Starts collecting EE basic block coverage hits.
+	bool StartEECoverageCollection();
+
+	/// Stops collecting EE coverage hits and saves the coverage file.
+	/// On success, filename_out receives the generated output path.
+	bool StopEECoverageCollection(std::string* filename_out = nullptr);
+
+	/// Returns true if EE coverage collection is currently active.
+	bool IsEECoverageCollectionActive();
+
+	/// Returns a pointer to the per-block EE coverage counter for block start address.
+	/// Only valid while coverage collection is active.
+	u64* GetEEBlockCoverageCounter(u32 address);
+
 	/// Called when the rich presence string, provided by RetroAchievements, changes.
 	void UpdateDiscordPresence(bool update_session_time);
 

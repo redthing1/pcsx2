@@ -111,6 +111,8 @@ public Q_SLOTS:
 	void queueSnapshot(quint32 gsdump_frames);
 	void beginCapture(const QString& path);
 	void endCapture();
+	void startEECoverageCollection();
+	void stopEECoverageCollection();
 
 Q_SIGNALS:
 	void statusMessage(const QString& message);
@@ -171,6 +173,7 @@ Q_SIGNALS:
 	/// Called when video capture starts/stops.
 	void onCaptureStarted(const QString& filename);
 	void onCaptureStopped();
+	void onEECoverageCollectionStateChanged(bool active, const QString& filename);
 
 protected:
 	void run();

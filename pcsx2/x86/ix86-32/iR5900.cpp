@@ -2126,6 +2126,11 @@ static bool skipMPEG_By_Pattern(u32 sPC)
 
 static bool recSkipTimeoutLoop(s32 reg, bool is_timeout_loop)
 {
+	// Coverage requires executing real blocks, otherwise timeout-loop fast-forwarding
+	// will undercount/miss loop body hits.
+	if (VMManager::IsEECoverageCollectionActive())
+		return false;
+
 	if (!EmuConfig.Speedhacks.WaitLoop || !is_timeout_loop)
 		return false;
 
@@ -2207,6 +2212,15 @@ static void recRecompile(const u32 startpc)
 	s_pCurBlockEx = recBlocks.New(HWADDR(startpc), (uptr)recPtr);
 
 	pxAssert(s_pCurBlockEx);
+
+	if (VMManager::IsEECoverageCollectionActive())
+	{
+		if (u64* const block_hits = VMManager::GetEEBlockCoverageCounter(HWADDR(startpc)))
+		{
+			xLoadFarAddr(rax, block_hits);
+			xADD(ptr64[rax], 1);
+		}
+	}
 
 	if (HWADDR(startpc) == EELOAD_START)
 	{

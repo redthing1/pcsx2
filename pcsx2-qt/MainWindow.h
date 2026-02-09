@@ -189,6 +189,7 @@ private Q_SLOTS:
 	void onBlockDumpActionToggled(bool checked);
 	void onShowAdvancedSettingsToggled(bool checked);
 	void onVideoCaptureToggled(bool checked);
+	void onEECoverageCollectionToggled(bool checked);
 	void onSettingsTriggeredFromToolbar();
 
 	// Input Recording
@@ -207,6 +208,7 @@ private Q_SLOTS:
 
 	void onCaptureStarted(const QString& filename);
 	void onCaptureStopped();
+	void onEECoverageCollectionStateChanged(bool active, const QString& filename);
 
 	void onAchievementsLoginRequested(Achievements::LoginRequestReason reason);
 	void onAchievementsHardcoreModeChanged(bool enabled);

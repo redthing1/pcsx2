@@ -62,8 +62,13 @@
 #include "fmt/format.h"
 
 #include <atomic>
+#include <algorithm>
+#include <cstdio>
+#include <ctime>
 #include <mutex>
+#include <memory>
 #include <sstream>
+#include <unordered_map>
 
 #ifdef _WIN32
 #include "common/RedtapeWindows.h"
@@ -140,6 +145,8 @@ namespace VMManager
 	static void SetHardwareDependentDefaultSettings(SettingsInterface& si);
 	static void EnsureCPUInfoInitialized();
 	static void SetEmuThreadAffinities();
+	static std::string GenerateEECoveragePath();
+	static bool WriteEECoverageFile(const std::string& filename, u32* block_count);
 
 	static void InitializeDiscordPresence();
 	static void ShutdownDiscordPresence();
@@ -197,6 +204,9 @@ static bool s_screensaver_inhibited = false;
 
 static bool s_discord_presence_active = false;
 static time_t s_discord_presence_time_epoch;
+
+static u32 s_ee_coverage_enabled = 0;
+static std::unordered_map<u32, std::unique_ptr<u64>> s_ee_coverage_hits;
 
 // Making GSDumpReplayer.h dependent on R5900.h is a no-no, since the GS uses it.
 extern R5900cpu GSDumpReplayerCpu;
@@ -1630,6 +1640,17 @@ void VMManager::Shutdown(bool save_resume_state)
 	// end input recording before clearing state
 	if (g_InputRecording.isActive())
 		g_InputRecording.stop();
+
+	if (s_ee_coverage_enabled != 0)
+	{
+		std::string coverage_filename;
+		if (!StopEECoverageCollection(&coverage_filename))
+		{
+			// VM is shutting down anyway, so always reset coverage runtime state.
+			s_ee_coverage_enabled = 0;
+			s_ee_coverage_hits.clear();
+		}
+	}
 
 	SaveSessionTime(s_disc_serial);
 	s_elf_override = {};
@@ -3392,6 +3413,130 @@ void VMManager::UpdateInhibitScreensaver(bool inhibit)
 		s_screensaver_inhibited = inhibit;
 	else if (inhibit)
 		Console.Warning("Failed to inhibit screen saver.");
+}
+
+std::string VMManager::GenerateEECoveragePath()
+{
+	std::string game_name = GetDiscSerial();
+	if (game_name.empty())
+		game_name = GetTitle(true);
+	if (game_name.empty())
+		game_name = "unknown_game";
+
+	Path::SanitizeFileName(&game_name);
+	if (game_name.empty())
+		game_name = "unknown_game";
+
+	const std::time_t current_time = std::time(nullptr);
+	std::tm local_time = {};
+#ifdef _WIN32
+	localtime_s(&local_time, &current_time);
+#else
+	localtime_r(&current_time, &local_time);
+#endif
+
+	char timestamp[32];
+	if (std::strftime(timestamp, sizeof(timestamp), "%Y%m%d_%H%M%S", &local_time) == 0)
+		std::snprintf(timestamp, sizeof(timestamp), "%lld", static_cast<long long>(current_time));
+
+	return Path::Combine(EmuFolders::Logs, fmt::format("{}_{}_coverage.cov", game_name, timestamp));
+}
+
+bool VMManager::WriteEECoverageFile(const std::string& filename, u32* block_count)
+{
+	std::vector<std::pair<u32, u64>> entries;
+	entries.reserve(s_ee_coverage_hits.size());
+	for (const auto& [address, hits_ptr] : s_ee_coverage_hits)
+		entries.emplace_back(address, hits_ptr ? *hits_ptr : 0);
+
+	std::sort(entries.begin(), entries.end(),
+		[](const std::pair<u32, u64>& lhs, const std::pair<u32, u64>& rhs) { return lhs.first < rhs.first; });
+
+	auto fp = FileSystem::OpenManagedCFile(filename.c_str(), "wb");
+	if (!fp)
+		return false;
+
+	for (const auto& [address, hits] : entries)
+	{
+		if (std::fprintf(fp.get(), "%08X %llu\n", address, static_cast<unsigned long long>(hits)) < 0)
+			return false;
+	}
+
+	if (std::fflush(fp.get()) != 0 || std::ferror(fp.get()) != 0)
+		return false;
+
+	if (block_count)
+		*block_count = static_cast<u32>(entries.size());
+
+	return true;
+}
+
+bool VMManager::StartEECoverageCollection()
+{
+	if (!HasValidVM())
+		return false;
+	if (s_ee_coverage_enabled != 0)
+		return true;
+
+	s_ee_coverage_hits.clear();
+	s_ee_coverage_hits.reserve(0x8000);
+	s_ee_coverage_enabled = 1;
+
+	// Recompile existing blocks so timeout-loop fast-forward paths are regenerated
+	// with coverage-accurate behavior.
+	Internal::ClearCPUExecutionCaches();
+
+	Host::AddOSDMessage(TRANSLATE_STR("VMManager", "EE coverage collection started."), Host::OSD_INFO_DURATION);
+	return true;
+}
+
+bool VMManager::StopEECoverageCollection(std::string* filename_out)
+{
+	if (filename_out)
+		filename_out->clear();
+
+	if (s_ee_coverage_enabled == 0)
+		return false;
+
+	const std::string filename = GenerateEECoveragePath();
+	u32 block_count = 0;
+	if (!WriteEECoverageFile(filename, &block_count))
+	{
+		Host::AddIconOSDMessage("EECoverageSaveFailed", ICON_FA_TRIANGLE_EXCLAMATION,
+			fmt::format(TRANSLATE_FS("VMManager", "Failed to save EE coverage to '{}'."), filename),
+			Host::OSD_ERROR_DURATION);
+		return false;
+	}
+
+	s_ee_coverage_enabled = 0;
+	s_ee_coverage_hits.clear();
+
+	// Recompile again so normal speedhacks (e.g. timeout-loop fast-forward) are restored.
+	Internal::ClearCPUExecutionCaches();
+
+	if (filename_out)
+		*filename_out = filename;
+
+	Host::AddIconOSDMessage("EECoverageSaved", ICON_FA_FLOPPY_DISK,
+		fmt::format(TRANSLATE_FS("VMManager", "EE coverage saved to '{}' ({} blocks)."), filename, block_count),
+		Host::OSD_INFO_DURATION);
+	return true;
+}
+
+bool VMManager::IsEECoverageCollectionActive()
+{
+	return (s_ee_coverage_enabled != 0);
+}
+
+u64* VMManager::GetEEBlockCoverageCounter(u32 address)
+{
+	if (s_ee_coverage_enabled == 0)
+		return nullptr;
+
+	auto [iter, inserted] = s_ee_coverage_hits.try_emplace(address);
+	if (inserted || !iter->second)
+		iter->second = std::make_unique<u64>(0);
+	return iter->second.get();
 }
 
 void VMManager::SaveSessionTime(const std::string& prev_serial)
