@@ -21,7 +21,7 @@
 #include <kddockwidgets/core/Group.h>
 #include <kddockwidgets/core/Stack.h>
 #include <kddockwidgets/core/indicators/SegmentedDropIndicatorOverlay.h>
-#include <kddockwidgets/qtwidgets/Stack.h>
+#include <kddockwidgets/qtwidgets/views/Stack.h>
 
 #include <QtCore/QTimer>
 #include <QtCore/QtTranslation>

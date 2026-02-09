@@ -1384,9 +1384,21 @@ function(setup_main_executable target)
 
 		pcsx2_resource(${target} ${PCSX2_SOURCE_DIR}/Resources/PCSX2.icns ${PCSX2_SOURCE_DIR}/Resources)
 
-		# Copy shaderc into the bundle
-		target_sources(${target} PRIVATE "${SHADERC_LIBRARY}")
-		set_source_files_properties("${SHADERC_LIBRARY}" PROPERTIES MACOSX_PACKAGE_LOCATION Frameworks)
+		# Copy shaderc into the bundle.
+		if(USE_VULKAN)
+			if(TARGET Shaderc::shaderc_shared)
+				add_custom_command(TARGET ${target} POST_BUILD
+					COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:${target}>/../Frameworks"
+					COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:Shaderc::shaderc_shared>" "$<TARGET_FILE_DIR:${target}>/../Frameworks/"
+					VERBATIM
+				)
+			elseif(SHADERC_LIBRARY)
+				target_sources(${target} PRIVATE "${SHADERC_LIBRARY}")
+				set_source_files_properties("${SHADERC_LIBRARY}" PROPERTIES MACOSX_PACKAGE_LOCATION Frameworks)
+			else()
+				message(WARNING "shaderc library path unavailable; the app may depend on a system shaderc at runtime.")
+			endif()
+		endif()
 
 		# Copy MoltenVK into the bundle
 		unset(MOLTENVK_PATH CACHE)

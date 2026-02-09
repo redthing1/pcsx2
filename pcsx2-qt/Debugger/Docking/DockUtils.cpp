@@ -6,8 +6,8 @@
 #include <kddockwidgets/Config.h>
 #include <kddockwidgets/core/DockRegistry.h>
 #include <kddockwidgets/core/Group.h>
-#include <kddockwidgets/qtwidgets/DockWidget.h>
-#include <kddockwidgets/qtwidgets/Group.h>
+#include <kddockwidgets/qtwidgets/views/DockWidget.h>
+#include <kddockwidgets/qtwidgets/views/Group.h>
 
 DockUtils::DockWidgetPair DockUtils::dockWidgetFromName(const QString& unique_name)
 {

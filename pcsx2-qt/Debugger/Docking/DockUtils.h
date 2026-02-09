@@ -5,7 +5,7 @@
 
 #include <kddockwidgets/KDDockWidgets.h>
 #include <kddockwidgets/core/DockWidget.h>
-#include <kddockwidgets/qtwidgets/MainWindow.h>
+#include <kddockwidgets/MainWindow.h>
 
 namespace DockUtils
 {

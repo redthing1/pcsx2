@@ -19,12 +19,7 @@ find_package(LZ4 REQUIRED)
 find_package(WebP REQUIRED) # v1.3.2, spews an error on Linux because no pkg-config.
 find_package(SDL3 3.2.6 REQUIRED)
 find_package(Freetype 2.12 REQUIRED)
-find_package(plutovg 1.1.0 REQUIRED)
-find_package(plutosvg 0.0.7 REQUIRED)
-
-if(USE_VULKAN)
-	find_package(Shaderc REQUIRED)
-endif()
+include(CustomDeps)
 
 # Platform-specific dependencies.
 if (WIN32)
@@ -115,10 +110,9 @@ if(ENABLE_QT_UI)
 			find_package(Qt6 COMPONENTS CorePrivate GuiPrivate WidgetsPrivate REQUIRED)
 		endif()
 	endif()
-
-	# The docking system for the debugger.
-	find_package(KDDockWidgets-qt6 2.3.0 REQUIRED)
 endif()
+
+pcsx2_resolve_custom_deps()
 
 if(WIN32)
 	add_subdirectory(3rdparty/rainterface EXCLUDE_FROM_ALL)

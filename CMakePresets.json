@@ -47,6 +47,21 @@
             }
         },
         {
+            "name": "build-macos-x64",
+            "displayName": "build-macos-x64",
+            "description": "Rosetta-friendly x86_64 build in a dedicated build-macos-x64 directory.",
+            "inherits": "clang-devel",
+            "binaryDir": "${sourceDir}/build-macos-x64",
+            "cacheVariables": {
+                "CMAKE_OSX_ARCHITECTURES": "x86_64",
+                "CMAKE_PREFIX_PATH": "/usr/local;/usr;/opt/local",
+                "CMAKE_IGNORE_PREFIX_PATH": "/opt/homebrew",
+                "CMAKE_DISABLE_FIND_PACKAGE_plutovg": "ON",
+                "CMAKE_DISABLE_FIND_PACKAGE_plutosvg": "ON",
+                "CMAKE_DISABLE_FIND_PACKAGE_Shaderc": "ON"
+            }
+        },
+        {
             "name": "clang-release",
             "displayName": "Clang Release",
             "description": "Release lto build using ninja & clang.",

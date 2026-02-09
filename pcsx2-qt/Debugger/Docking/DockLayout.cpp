@@ -20,8 +20,8 @@
 #include <kddockwidgets/core/Group.h>
 #include <kddockwidgets/core/Layout.h>
 #include <kddockwidgets/core/ViewFactory.h>
-#include <kddockwidgets/qtwidgets/Group.h>
-#include <kddockwidgets/qtwidgets/MainWindow.h>
+#include <kddockwidgets/qtwidgets/views/Group.h>
+#include <kddockwidgets/MainWindow.h>
 
 #include "rapidjson/document.h"
 #include "rapidjson/prettywriter.h"
