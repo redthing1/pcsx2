@@ -48,6 +48,14 @@ namespace
 	static constexpr int EE_HI_REG = 33;
 	static constexpr int EE_LO_REG = 34;
 	static constexpr int EE_REG_COUNT = 35;
+	static constexpr int EE_SP_REG = 29;
+	static constexpr int EE_FP_REG = 30;
+	static constexpr int EE_RA_REG = 31;
+	static constexpr int EE_REG_BITS = 64;
+	static constexpr int EE_REG_BYTES = EE_REG_BITS / 8;
+	static constexpr int EE_DWARF_LO_REG = 33;
+	static constexpr int EE_DWARF_HI_REG = 34;
+	static constexpr int EE_DWARF_PC_REG = 37;
 	static constexpr int EE_SIGNAL_TRAP = 5;
 	static constexpr int EE_SIGNAL_INTERRUPT = 2;
 	static constexpr char OSD_KEY[] = "EEGDBStub";
@@ -60,6 +68,7 @@ namespace
 	static constexpr char EE_TARGET_HOSTNAME[] = "pcsx2-ee";
 	static constexpr char EE_TARGET_OSTYPE[] = "none";
 	static constexpr char EE_THREAD_NAME[] = "EE";
+	static constexpr char EE_REG_SET_GENERAL[] = "General Purpose Registers";
 
 	static constexpr std::array<const char*, EE_GPR_COUNT> EE_GPR_NAMES = {
 		"zero", "at", "v0", "v1", "a0", "a1", "a2", "a3",
@@ -67,6 +76,99 @@ namespace
 		"s0", "s1", "s2", "s3", "s4", "s5", "s6", "s7",
 		"t8", "t9", "k0", "k1", "gp", "sp", "fp", "ra",
 	};
+
+	struct EERegisterDescriptor
+	{
+		const char* name = "";
+		const char* alt_name = nullptr;
+		const char* encoding = "uint";
+		const char* format = "hex";
+		const char* set = EE_REG_SET_GENERAL;
+		const char* generic = nullptr;
+		int bitsize = EE_REG_BITS;
+		int offset = -1;
+		int dwarf_regnum = -1;
+		int ehframe_regnum = -1;
+	};
+
+	static constexpr std::array<EERegisterDescriptor, EE_REG_COUNT> BuildEERegisterDescriptors()
+	{
+		std::array<EERegisterDescriptor, EE_REG_COUNT> descriptors = {};
+		for (int i = 0; i < EE_GPR_COUNT; i++)
+		{
+			descriptors[static_cast<size_t>(i)] = EERegisterDescriptor{
+				.name = EE_GPR_NAMES[static_cast<size_t>(i)],
+				.offset = i * EE_REG_BYTES,
+				.dwarf_regnum = i,
+				.ehframe_regnum = i,
+			};
+		}
+
+		// LLDB's MIPS ABI plugin expects canonical r29/r30/r31 names for SP/FP/RA.
+		descriptors[EE_SP_REG].name = "r29";
+		descriptors[EE_SP_REG].alt_name = "sp";
+		descriptors[EE_SP_REG].generic = "sp";
+		descriptors[EE_FP_REG].name = "r30";
+		descriptors[EE_FP_REG].alt_name = "fp";
+		descriptors[EE_FP_REG].generic = "fp";
+		descriptors[EE_RA_REG].name = "r31";
+		descriptors[EE_RA_REG].alt_name = "ra";
+		descriptors[EE_RA_REG].generic = "ra";
+
+		descriptors[EE_PC_REG] = EERegisterDescriptor{
+			.name = "pc",
+			.generic = "pc",
+			.offset = EE_PC_REG * EE_REG_BYTES,
+			.dwarf_regnum = EE_DWARF_PC_REG,
+			.ehframe_regnum = EE_DWARF_PC_REG,
+		};
+		descriptors[EE_HI_REG] = EERegisterDescriptor{
+			.name = "hi",
+			.offset = EE_HI_REG * EE_REG_BYTES,
+			.dwarf_regnum = EE_DWARF_HI_REG,
+			.ehframe_regnum = EE_DWARF_HI_REG,
+		};
+		descriptors[EE_LO_REG] = EERegisterDescriptor{
+			.name = "lo",
+			.offset = EE_LO_REG * EE_REG_BYTES,
+			.dwarf_regnum = EE_DWARF_LO_REG,
+			.ehframe_regnum = EE_DWARF_LO_REG,
+		};
+
+		return descriptors;
+	}
+
+	static constexpr std::array<EERegisterDescriptor, EE_REG_COUNT> EE_REGISTER_DESCRIPTORS = BuildEERegisterDescriptors();
+
+	static constexpr const EERegisterDescriptor* GetEERegisterDescriptor(int regno)
+	{
+		if (regno < 0 || regno >= EE_REG_COUNT)
+			return nullptr;
+
+		return &EE_REGISTER_DESCRIPTORS[static_cast<size_t>(regno)];
+	}
+
+	static gdbstub::register_info BuildRegisterInfo(const EERegisterDescriptor& descriptor)
+	{
+		gdbstub::register_info info;
+		info.name = descriptor.name;
+		if (descriptor.alt_name)
+			info.alt_name = descriptor.alt_name;
+		info.bitsize = descriptor.bitsize;
+		if (descriptor.offset >= 0)
+			info.offset = static_cast<size_t>(descriptor.offset);
+		info.encoding = descriptor.encoding;
+		info.format = descriptor.format;
+		info.set = descriptor.set;
+		if (descriptor.generic)
+			info.generic = descriptor.generic;
+		if (descriptor.ehframe_regnum >= 0)
+			info.gcc_regnum = descriptor.ehframe_regnum;
+		if (descriptor.dwarf_regnum >= 0)
+			info.dwarf_regnum = descriptor.dwarf_regnum;
+
+		return info;
+	}
 
 	enum class ServiceState : u8
 	{
@@ -200,16 +302,24 @@ namespace
 	static std::string BuildTargetXML()
 	{
 		std::string xml;
-		xml.reserve(2048);
+		xml.reserve(4096);
 		xml += R"(<?xml version="1.0"?><target version="1.0"><architecture>mips64el</architecture><feature name="org.gnu.gdb.mips.cpu">)";
-		for (int i = 0; i < EE_GPR_COUNT; i++)
+		for (int i = 0; i < EE_REG_COUNT; i++)
 		{
-			xml += fmt::format(R"(<reg name="{}" bitsize="64" regnum="{}"{}/>)",
-				EE_GPR_NAMES[static_cast<size_t>(i)], i, (i == 29 ? R"( generic="sp")" : ""));
+			const EERegisterDescriptor& descriptor = EE_REGISTER_DESCRIPTORS[static_cast<size_t>(i)];
+			xml += fmt::format(R"(<reg name="{}" bitsize="{}" regnum="{}")", descriptor.name, descriptor.bitsize, i);
+			if (descriptor.alt_name)
+				xml += fmt::format(R"( altname="{}")", descriptor.alt_name);
+			if (descriptor.offset >= 0)
+				xml += fmt::format(R"( offset="{}")", descriptor.offset);
+			if (descriptor.generic)
+				xml += fmt::format(R"( generic="{}")", descriptor.generic);
+			if (descriptor.dwarf_regnum >= 0)
+				xml += fmt::format(R"( dwarf_regnum="{}")", descriptor.dwarf_regnum);
+			if (descriptor.ehframe_regnum >= 0)
+				xml += fmt::format(R"( ehframe_regnum="{}")", descriptor.ehframe_regnum);
+			xml += "/>";
 		}
-		xml += fmt::format(R"(<reg name="pc" bitsize="64" regnum="{}" generic="pc"/>)", EE_PC_REG);
-		xml += fmt::format(R"(<reg name="hi" bitsize="64" regnum="{}"/>)", EE_HI_REG);
-		xml += fmt::format(R"(<reg name="lo" bitsize="64" regnum="{}"/>)", EE_LO_REG);
 		xml += "</feature></target>";
 		return xml;
 	}
@@ -687,26 +797,33 @@ namespace
 
 	size_t EEGDBStubService::RegSize(int regno)
 	{
-		if (regno < 0 || regno >= EE_REG_COUNT)
+		const EERegisterDescriptor* descriptor = GetEERegisterDescriptor(regno);
+		if (!descriptor || descriptor->bitsize <= 0 || (descriptor->bitsize % 8) != 0)
 			return 0;
-		return sizeof(u64);
+
+		return static_cast<size_t>(descriptor->bitsize / 8);
 	}
 
 	gdbstub::target_status EEGDBStubService::ReadReg(int regno, std::span<std::byte> out)
 	{
-		if (RegSize(regno) == 0 || out.size() != sizeof(u64))
+		const size_t reg_size = RegSize(regno);
+		if (reg_size != EE_REG_BYTES || out.size() != reg_size)
 			return gdbstub::target_status::invalid;
 
 		const u64 value = RunOnCPUThreadBlockingResult([regno]() -> u64 {
-			if (regno < EE_GPR_COUNT)
-				return r5900Debug.getRegister(EECAT_GPR, regno).lo;
-			if (regno == EE_PC_REG)
-				return static_cast<u64>(r5900Debug.getPC());
-			if (regno == EE_HI_REG)
-				return r5900Debug.getHI().lo;
-			if (regno == EE_LO_REG)
-				return r5900Debug.getLO().lo;
-			return 0;
+			switch (regno)
+			{
+				case EE_PC_REG:
+					return static_cast<u64>(r5900Debug.getPC());
+				case EE_HI_REG:
+					return r5900Debug.getHI().lo;
+				case EE_LO_REG:
+					return r5900Debug.getLO().lo;
+				default:
+					if (regno >= 0 && regno < EE_GPR_COUNT)
+						return r5900Debug.getRegister(EECAT_GPR, regno).lo;
+					return 0;
+			}
 		});
 
 		EncodeU64LE(value, out);
@@ -715,33 +832,32 @@ namespace
 
 	gdbstub::target_status EEGDBStubService::WriteReg(int regno, std::span<const std::byte> data)
 	{
-		if (RegSize(regno) == 0 || data.size() != sizeof(u64))
+		const size_t reg_size = RegSize(regno);
+		if (reg_size != EE_REG_BYTES || data.size() != reg_size)
 			return gdbstub::target_status::invalid;
 
 		const u64 value = DecodeU64LE(data);
 
 		return RunOnCPUThreadBlockingResult([regno, value]() -> gdbstub::target_status {
-			if (regno < EE_GPR_COUNT)
+			switch (regno)
 			{
-				r5900Debug.setRegister(EECAT_GPR, regno, u128::From64(value));
-				return gdbstub::target_status::ok;
+				case EE_PC_REG:
+					r5900Debug.setPc(static_cast<u32>(value));
+					return gdbstub::target_status::ok;
+				case EE_HI_REG:
+					cpuRegs.HI.UD[0] = value;
+					return gdbstub::target_status::ok;
+				case EE_LO_REG:
+					cpuRegs.LO.UD[0] = value;
+					return gdbstub::target_status::ok;
+				default:
+					if (regno >= 0 && regno < EE_GPR_COUNT)
+					{
+						r5900Debug.setRegister(EECAT_GPR, regno, u128::From64(value));
+						return gdbstub::target_status::ok;
+					}
+					return gdbstub::target_status::invalid;
 			}
-			if (regno == EE_PC_REG)
-			{
-				r5900Debug.setPc(static_cast<u32>(value));
-				return gdbstub::target_status::ok;
-			}
-			if (regno == EE_HI_REG)
-			{
-				cpuRegs.HI.UD[0] = value;
-				return gdbstub::target_status::ok;
-			}
-			if (regno == EE_LO_REG)
-			{
-				cpuRegs.LO.UD[0] = value;
-				return gdbstub::target_status::ok;
-			}
-			return gdbstub::target_status::invalid;
 		});
 	}
 
@@ -1262,41 +1378,11 @@ namespace
 
 	std::optional<gdbstub::register_info> EEGDBStubService::GetRegisterInfo(int regno)
 	{
-		if (regno < 0 || regno >= EE_REG_COUNT)
+		const EERegisterDescriptor* descriptor = GetEERegisterDescriptor(regno);
+		if (!descriptor)
 			return std::nullopt;
 
-		gdbstub::register_info info;
-		info.bitsize = 64;
-		info.encoding = "uint";
-		info.format = "hex";
-		info.set = "General Purpose Registers";
-
-		if (regno < EE_GPR_COUNT)
-		{
-			info.name = EE_GPR_NAMES[static_cast<size_t>(regno)];
-			if (regno == 29)
-				info.generic = "sp";
-			return info;
-		}
-
-		if (regno == EE_PC_REG)
-		{
-			info.name = "pc";
-			info.generic = "pc";
-			return info;
-		}
-		if (regno == EE_HI_REG)
-		{
-			info.name = "hi";
-			return info;
-		}
-		if (regno == EE_LO_REG)
-		{
-			info.name = "lo";
-			return info;
-		}
-
-		return std::nullopt;
+		return BuildRegisterInfo(*descriptor);
 	}
 
 	size_t EERegsCapability::reg_size(int regno)
