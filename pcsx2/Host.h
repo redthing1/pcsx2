@@ -84,6 +84,9 @@ namespace Host
 	/// Safely executes a function on the VM thread.
 	void RunOnCPUThread(std::function<void()> function, bool block = false);
 
+	/// Returns true when Host::RunOnCPUThread() can dispatch work to the VM thread.
+	bool HasCPUThreadDispatcher();
+
 	/// Asynchronously starts refreshing the game list.
 	void RefreshGameListAsync(bool invalidate_cache);
 

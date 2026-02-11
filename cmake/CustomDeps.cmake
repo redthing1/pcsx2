@@ -215,6 +215,45 @@ function(pcsx2_resolve_custom_dep_kddockwidgets)
 	_pcsx2_customdeps_require_target(KDAB::kddockwidgets "KDDockWidgets-qt6")
 endfunction()
 
+function(pcsx2_resolve_custom_dep_gdbstub_cpp)
+	if(NOT ENABLE_EE_GDBSTUB)
+		return()
+	endif()
+
+	if(TARGET gdbstub::gdbstub)
+		return()
+	endif()
+
+	message(STATUS "CustomDeps: fetching gdbstub_cpp ${PCSX2_CUSTOM_DEP_GDBSTUB_CPP_TAG}")
+	set(GDBSTUB_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+	set(GDBSTUB_SANITIZE OFF CACHE BOOL "" FORCE)
+
+	FetchContent_Declare(
+		pcsx2_custom_dep_gdbstub_cpp
+		GIT_REPOSITORY "${PCSX2_CUSTOM_DEP_GDBSTUB_CPP_REPOSITORY}"
+		GIT_TAG "${PCSX2_CUSTOM_DEP_GDBSTUB_CPP_TAG}"
+		GIT_SHALLOW FALSE
+	)
+
+	FetchContent_MakeAvailable(pcsx2_custom_dep_gdbstub_cpp)
+
+	if(TARGET gdbstub AND NOT TARGET gdbstub::gdbstub)
+		add_library(gdbstub::gdbstub ALIAS gdbstub)
+	endif()
+
+	if(TARGET gdbstub_tool)
+		set_target_properties(gdbstub_tool PROPERTIES EXCLUDE_FROM_ALL TRUE EXCLUDE_FROM_DEFAULT_BUILD TRUE)
+	endif()
+	if(TARGET gdbstub_test)
+		set_target_properties(gdbstub_test PROPERTIES EXCLUDE_FROM_ALL TRUE EXCLUDE_FROM_DEFAULT_BUILD TRUE)
+	endif()
+	if(TARGET gdbstub_capi_test)
+		set_target_properties(gdbstub_capi_test PROPERTIES EXCLUDE_FROM_ALL TRUE EXCLUDE_FROM_DEFAULT_BUILD TRUE)
+	endif()
+
+	_pcsx2_customdeps_require_target(gdbstub::gdbstub "gdbstub_cpp")
+endfunction()
+
 function(pcsx2_resolve_custom_dep_shaderc out_include_dir out_library_path)
 	set(_shaderc_include_dir "")
 	set(_shaderc_library_path "")
@@ -297,6 +336,7 @@ endfunction()
 function(pcsx2_resolve_custom_deps)
 	pcsx2_resolve_custom_dep_plutovg()
 	pcsx2_resolve_custom_dep_plutosvg()
+	pcsx2_resolve_custom_dep_gdbstub_cpp()
 
 	if(USE_VULKAN)
 		pcsx2_resolve_custom_dep_shaderc(_pcsx2_shaderc_include_dir _pcsx2_shaderc_library_path)

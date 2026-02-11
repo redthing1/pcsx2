@@ -1946,6 +1946,8 @@ Pcsx2Config::Pcsx2Config()
 
 	GzipIsoIndexTemplate = "$(f).pindex.tmp";
 	PINESlot = 28011;
+	EEGDBStubPauseOnConnect = true;
+	EEGDBStubPort = 2345;
 	RtcYear = 0;
 	RtcMonth = 1;
 	RtcDay = 1;
@@ -1964,6 +1966,8 @@ void Pcsx2Config::LoadSaveCore(SettingsWrapper& wrap)
 	SettingsWrapBitBool(EnablePatches);
 	SettingsWrapBitBool(EnableCheats);
 	SettingsWrapBitBool(EnablePINE);
+	SettingsWrapBitBool(EnableEEGDBStub);
+	SettingsWrapBitBool(EEGDBStubPauseOnConnect);
 	SettingsWrapBitBool(EnableWideScreenPatches);
 	SettingsWrapBitBool(EnableNoInterlacingPatches);
 	SettingsWrapBitBool(EnableFastBoot);
@@ -2002,6 +2006,7 @@ void Pcsx2Config::LoadSaveCore(SettingsWrapper& wrap)
 
 	SettingsWrapEntry(GzipIsoIndexTemplate);
 	SettingsWrapEntry(PINESlot);
+	SettingsWrapEntry(EEGDBStubPort);
 	SettingsWrapEntry(RtcYear);
 	SettingsWrapEntry(RtcMonth);
 	SettingsWrapEntry(RtcDay);

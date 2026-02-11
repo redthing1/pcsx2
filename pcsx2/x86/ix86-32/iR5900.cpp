@@ -1527,16 +1527,25 @@ void dynarecCheckBreakpoint()
 	if (!hit)
 		return;
 
+	BreakpointTriggerInfo info;
+	info.kind = BreakpointTriggerKind::AddressBreakpoint;
+	info.cpu = BREAKPOINT_EE;
+	info.pc = pc;
+	info.addr = pc;
+	info.size = 4;
+	CBreakPoints::SetBreakpointTriggerInfo(info);
+
 	CBreakPoints::SetBreakpointTriggered(true, BREAKPOINT_EE);
 	VMManager::SetPaused(true);
 	recExitExecution();
 }
 
-void dynarecMemcheck(size_t i)
+void dynarecMemcheck(size_t i, u32 addr)
 {
 	const u32 op = memRead32(cpuRegs.pc);
 	const OPCODE& opcode = GetInstruction(op);
-	if (CBreakPoints::CheckSkipFirst(BREAKPOINT_EE, pc) != 0)
+	const u32 current_pc = cpuRegs.pc;
+	if (CBreakPoints::CheckSkipFirst(BREAKPOINT_EE, current_pc) != 0)
 	{
 		CBreakPoints::ClearSkipFirst(BREAKPOINT_EE);
 		return;
@@ -1553,10 +1562,41 @@ void dynarecMemcheck(size_t i)
 	if (mc.result & MEMCHECK_LOG)
 	{
 		if (opcode.flags & IS_STORE)
-			DevCon.WriteLn("Hit store breakpoint @0x%x", cpuRegs.pc);
+			DevCon.WriteLn("Hit store breakpoint @0x%x", current_pc);
 		else
-			DevCon.WriteLn("Hit load breakpoint @0x%x", cpuRegs.pc);
+			DevCon.WriteLn("Hit load breakpoint @0x%x", current_pc);
 	}
+
+	u32 access_size = 0;
+	switch (opcode.flags & MEMTYPE_MASK)
+	{
+		case MEMTYPE_BYTE:
+			access_size = 1;
+			break;
+		case MEMTYPE_HALF:
+			access_size = 2;
+			break;
+		case MEMTYPE_WORD:
+			access_size = 4;
+			break;
+		case MEMTYPE_DWORD:
+			access_size = 8;
+			break;
+		case MEMTYPE_QWORD:
+			access_size = 16;
+			break;
+		default:
+			access_size = 0;
+			break;
+	}
+
+	BreakpointTriggerInfo info;
+	info.kind = (opcode.flags & IS_STORE) ? BreakpointTriggerKind::WatchWrite : BreakpointTriggerKind::WatchRead;
+	info.cpu = BREAKPOINT_EE;
+	info.pc = current_pc;
+	info.addr = addr;
+	info.size = access_size;
+	CBreakPoints::SetBreakpointTriggerInfo(info);
 
 	CBreakPoints::SetBreakpointTriggered(true, BREAKPOINT_EE);
 	VMManager::SetPaused(true);
@@ -1606,7 +1646,7 @@ void recMemcheck(u32 op, u32 bits, bool store)
 		if (checks[i].result & MEMCHECK_BREAK)
 		{
 			xMOV(eax, i);
-			xFastCall((void*)dynarecMemcheck, eax);
+			xFastCall((void*)dynarecMemcheck, eax, ecx);
 		}
 
 		next1.SetTarget();

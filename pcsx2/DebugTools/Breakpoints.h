@@ -5,6 +5,8 @@
 
 #include <algorithm>
 #include <iterator>
+#include <optional>
+#include <utility>
 #include <vector>
 
 #include "DebugInterface.h"
@@ -100,6 +102,26 @@ struct MemCheck
 	}
 };
 
+enum class BreakpointTriggerKind : u8
+{
+	None = 0,
+	AddressBreakpoint,
+	WatchRead,
+	WatchWrite,
+	WatchAccess,
+	ManualPause,
+	StepComplete,
+};
+
+struct BreakpointTriggerInfo
+{
+	BreakpointTriggerKind kind = BreakpointTriggerKind::None;
+	BreakPointCpu cpu = BREAKPOINT_EE;
+	u32 pc = 0;
+	u32 addr = 0;
+	u32 size = 0;
+};
+
 // BreakPoints cannot overlap, only one is allowed per address.
 // MemChecks can overlap, as long as their ends are different.
 // WARNING: MemChecks are not used in the interpreter or HLE currently.
@@ -115,6 +137,8 @@ public:
 	static bool IsSteppingBreakPoint(BreakPointCpu cpu, u32 addr);
 	static void AddBreakPoint(BreakPointCpu cpu, u32 addr, bool temp = false, bool enabled = true, bool stepping = false);
 	static void RemoveBreakPoint(BreakPointCpu cpu, u32 addr);
+	// Removes only a temporary or non-temporary breakpoint at the exact address.
+	static void RemoveBreakPoint(BreakPointCpu cpu, u32 addr, bool temp);
 	static void ChangeBreakPoint(BreakPointCpu cpu, u32 addr, bool enable);
 	static void ClearAllBreakPoints();
 	static void ClearTemporaryBreakPoints();
@@ -156,9 +180,28 @@ public:
 	{
 		breakpointTriggered_ = triggered;
 		breakpointTriggeredCpu_ = cpu;
+		if (!triggered)
+			breakpointTriggerInfo_.reset();
 	};
 	static bool GetBreakpointTriggered() { return breakpointTriggered_; };
 	static BreakPointCpu GetBreakpointTriggeredCpu() { return breakpointTriggeredCpu_; };
+	static void SetBreakpointTriggerInfo(BreakpointTriggerInfo info)
+	{
+		breakpointTriggerInfo_ = std::move(info);
+		breakpointTriggered_ = (breakpointTriggerInfo_->kind != BreakpointTriggerKind::None);
+		breakpointTriggeredCpu_ = breakpointTriggerInfo_->cpu;
+	}
+	static std::optional<BreakpointTriggerInfo> ConsumeBreakpointTriggerInfo()
+	{
+		std::optional<BreakpointTriggerInfo> info = breakpointTriggerInfo_;
+		if (info.has_value())
+		{
+			breakpointTriggerInfo_.reset();
+			breakpointTriggered_ = false;
+			breakpointTriggeredCpu_ = BREAKPOINT_IOP_AND_EE;
+		}
+		return info;
+	}
 
 	static bool GetCorePaused() { return corePaused; };
 	static void SetCorePaused(bool b) { corePaused = b; };
@@ -176,6 +219,7 @@ private:
 
 	static bool breakpointTriggered_;
 	static BreakPointCpu breakpointTriggeredCpu_;
+	static std::optional<BreakpointTriggerInfo> breakpointTriggerInfo_;
 	static bool corePaused;
 
 	static std::vector<MemCheck> memChecks_;

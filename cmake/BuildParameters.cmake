@@ -9,6 +9,7 @@ include(GNUInstallDirs)
 option(ENABLE_TESTS "Enables building the unit tests" ON)
 option(ENABLE_QT_UI "Enables building the PCSX2 Qt interface." ON)
 option(ENABLE_GSRUNNER "Enables building the GSRunner by default.  It can still be built with `make pcsx2-gsrunner` otherwise." OFF)
+option(ENABLE_EE_GDBSTUB "Enable EE gdbstub remote debugging integration." ON)
 option(LTO_PCSX2_CORE "Enable LTO/IPO/LTCG on the subset of pcsx2 that benefits most from it but not anything else")
 option(USE_VTUNE "Plug VTUNE to profile GS JIT.")
 option(PACKAGE_MODE "Use this option to ease packaging of PCSX2 (developer/distribution option)")
@@ -221,6 +222,10 @@ endif()
 
 if(USE_VULKAN)
 	list(APPEND PCSX2_DEFS ENABLE_VULKAN)
+endif()
+
+if(ENABLE_EE_GDBSTUB)
+	list(APPEND PCSX2_DEFS ENABLE_EE_GDBSTUB)
 endif()
 
 if(X11_API)

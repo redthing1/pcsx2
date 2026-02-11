@@ -77,6 +77,14 @@ void intBreakpoint(bool memcheck)
 		auto cond = CBreakPoints::GetBreakPointCondition(BREAKPOINT_EE, pc);
 		if (cond && !cond->Evaluate())
 			return;
+
+		BreakpointTriggerInfo info;
+		info.kind = BreakpointTriggerKind::AddressBreakpoint;
+		info.cpu = BREAKPOINT_EE;
+		info.pc = pc;
+		info.addr = pc;
+		info.size = 4;
+		CBreakPoints::SetBreakpointTriggerInfo(info);
 	}
 
 	CBreakPoints::SetBreakpointTriggered(true, BREAKPOINT_EE);
@@ -115,7 +123,16 @@ void intMemcheck(u32 op, u32 bits, bool store)
 		}
 
 		if (start < check.end && check.start < end)
+		{
+			BreakpointTriggerInfo info;
+			info.kind = store ? BreakpointTriggerKind::WatchWrite : BreakpointTriggerKind::WatchRead;
+			info.cpu = BREAKPOINT_EE;
+			info.pc = cpuRegs.pc;
+			info.addr = start;
+			info.size = bits / 8;
+			CBreakPoints::SetBreakpointTriggerInfo(info);
 			intBreakpoint(true);
+		}
 	}
 }
 

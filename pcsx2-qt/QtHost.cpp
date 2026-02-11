@@ -1238,6 +1238,11 @@ void Host::RunOnCPUThread(std::function<void()> function, bool block /* = false 
 		Q_ARG(const std::function<void()>&, std::move(function)));
 }
 
+bool Host::HasCPUThreadDispatcher()
+{
+	return true;
+}
+
 void Host::RefreshGameListAsync(bool invalidate_cache)
 {
 	QMetaObject::invokeMethod(g_main_window, "refreshGameList", Qt::QueuedConnection, Q_ARG(bool, invalidate_cache));

@@ -16,7 +16,8 @@ bool CBreakPoints::pendingClearSkipFirstAtIop_ = false;
 std::vector<MemCheck> CBreakPoints::memChecks_;
 std::vector<MemCheck*> CBreakPoints::cleanupMemChecks_;
 bool CBreakPoints::breakpointTriggered_ = false;
-BreakPointCpu CBreakPoints::breakpointTriggeredCpu_;
+BreakPointCpu CBreakPoints::breakpointTriggeredCpu_ = BREAKPOINT_IOP_AND_EE;
+std::optional<BreakpointTriggerInfo> CBreakPoints::breakpointTriggerInfo_;
 bool CBreakPoints::corePaused = false;
 
 // called from the dynarec
@@ -215,6 +216,16 @@ void CBreakPoints::RemoveBreakPoint(BreakPointCpu cpu, u32 addr)
 
 		Update(cpu, addr);
 	}
+}
+
+void CBreakPoints::RemoveBreakPoint(BreakPointCpu cpu, u32 addr, bool temp)
+{
+	const size_t bp = FindBreakpoint(cpu, addr, true, temp);
+	if (bp == INVALID_BREAKPOINT)
+		return;
+
+	breakPoints_.erase(breakPoints_.begin() + bp);
+	Update(cpu, addr);
 }
 
 void CBreakPoints::ChangeBreakPoint(BreakPointCpu cpu, u32 addr, bool status)

@@ -8,6 +8,7 @@
 #include "Counters.h"
 #include "DEV9/DEV9.h"
 #include "DebugTools/DebugInterface.h"
+#include "DebugTools/GDBStubEE.h"
 #include "DebugTools/SymbolImporter.h"
 #include "Elfheader.h"
 #include "FW.h"
@@ -137,6 +138,7 @@ namespace VMManager
 	static void ResetResumeTimestamp();
 	static void SaveSessionTime(const std::string& prev_serial);
 	static void ReloadPINE();
+	static void ReloadEEGDBStub();
 
 	static float GetTargetSpeedForLimiterMode(LimiterModeType mode);
 	static void ResetFrameLimiter();
@@ -427,6 +429,7 @@ bool VMManager::Internal::CPUThreadInitialize()
 		Achievements::Initialize();
 
 	ReloadPINE();
+	ReloadEEGDBStub();
 
 	if (EmuConfig.EnableDiscordPresence)
 		InitializeDiscordPresence();
@@ -443,6 +446,7 @@ void VMManager::Internal::CPUThreadShutdown()
 	ShutdownDiscordPresence();
 
 	PINEServer::Deinitialize();
+	EEGDBStub::Deinitialize();
 
 	Achievements::Shutdown(false);
 
@@ -1130,6 +1134,7 @@ void VMManager::UpdateDiscDetails(bool booting)
 	{
 		Achievements::GameChanged(s_disc_crc, s_current_crc);
 		ReloadPINE();
+		ReloadEEGDBStub();
 		UpdateDiscordPresence(s_state.load(std::memory_order_relaxed) == VMState::Initializing);
 		FileMcd_Reopen(memcardFilters.empty() ? s_disc_serial : memcardFilters);
 	}
@@ -3071,6 +3076,14 @@ void VMManager::CheckForMiscConfigChanges(const Pcsx2Config& old_config)
 	{
 		SetEmuThreadAffinities();
 	}
+
+	if (HasValidVM() &&
+		(EmuConfig.EnableEEGDBStub != old_config.EnableEEGDBStub ||
+			EmuConfig.EEGDBStubPort != old_config.EEGDBStubPort ||
+			EmuConfig.EEGDBStubPauseOnConnect != old_config.EEGDBStubPauseOnConnect))
+	{
+		ReloadEEGDBStub();
+	}
 }
 
 void VMManager::CheckForConfigChanges(const Pcsx2Config& old_config)
@@ -3142,6 +3155,7 @@ void VMManager::EnforceAchievementsChallengeModeSettings()
 	// Input recording/playback is probably an issue.
 	EmuConfig.EnableRecordingTools = false;
 	EmuConfig.EnablePINE = false;
+	EmuConfig.EnableEEGDBStub = false;
 
 	// Framerates should be at default.
 	EmuConfig.GS.FramerateNTSC = Pcsx2Config::GSOptions::DEFAULT_FRAME_RATE_NTSC;
@@ -3825,6 +3839,26 @@ void VMManager::ReloadPINE()
 
 	if (EmuConfig.EnablePINE)
 		PINEServer::Initialize(EmuConfig.PINESlot);
+}
+
+void VMManager::ReloadEEGDBStub()
+{
+	const u16 configured_port = static_cast<u16>(std::clamp(EmuConfig.EEGDBStubPort, 1, 65535));
+	const bool needs_reinit = (EmuConfig.EnableEEGDBStub != EEGDBStub::IsInitialized() ||
+		EEGDBStub::GetPort() != configured_port ||
+		EEGDBStub::GetPauseOnConnect() != EmuConfig.EEGDBStubPauseOnConnect);
+	if (!needs_reinit)
+		return;
+
+	EEGDBStub::Deinitialize();
+
+	if (EmuConfig.EnableEEGDBStub)
+	{
+		EEGDBStub::Config config = {};
+		config.port = configured_port;
+		config.pause_on_connect = EmuConfig.EEGDBStubPauseOnConnect;
+		EEGDBStub::Initialize(config);
+	}
 }
 
 void VMManager::InitializeDiscordPresence()

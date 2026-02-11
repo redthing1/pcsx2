@@ -152,6 +152,11 @@ void Host::RunOnCPUThread(std::function<void()> function, bool block /* = false 
 {
 }
 
+bool Host::HasCPUThreadDispatcher()
+{
+	return false;
+}
+
 void Host::RefreshGameListAsync(bool invalidate_cache)
 {
 }

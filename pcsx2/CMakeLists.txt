@@ -793,6 +793,7 @@ set(pcsx2DebugToolsSources
 	DebugTools/MipsAssemblerTables.cpp
 	DebugTools/MipsStackWalk.cpp
 	DebugTools/Breakpoints.cpp
+	DebugTools/GDBStubEE.cpp
 	DebugTools/SymbolGuardian.cpp
 	DebugTools/SymbolImporter.cpp
 	DebugTools/DisR3000A.cpp
@@ -811,6 +812,7 @@ set(pcsx2DebugToolsHeaders
 	DebugTools/MipsAssemblerTables.h
 	DebugTools/MipsStackWalk.h
 	DebugTools/Breakpoints.h
+	DebugTools/GDBStubEE.h
 	DebugTools/SymbolGuardian.h
 	DebugTools/SymbolImporter.h
 	DebugTools/Debug.h
@@ -876,6 +878,10 @@ if(WIN32)
 	# RAIntegration is only supported on Windows.
 	target_compile_definitions(PCSX2_FLAGS INTERFACE ENABLE_RAINTEGRATION)
 	target_link_libraries(PCSX2_FLAGS INTERFACE rainterface)
+endif()
+
+if(ENABLE_EE_GDBSTUB)
+	target_link_libraries(PCSX2_FLAGS INTERFACE gdbstub::gdbstub)
 endif()
 if(WIN32)
 	list(APPEND pcsx2InputSources

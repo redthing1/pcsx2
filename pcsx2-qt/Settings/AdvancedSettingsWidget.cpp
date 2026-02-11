@@ -69,6 +69,9 @@ AdvancedSettingsWidget::AdvancedSettingsWidget(SettingsWindow* settings_dialog, 
 
 	SettingWidgetBinder::BindWidgetToBoolSetting(sif, m_ui.pineEnable, "EmuCore", "EnablePINE", false);
 	SettingWidgetBinder::BindWidgetToIntSetting(sif, m_ui.pineSlot, "EmuCore", "PINESlot", 28011);
+	SettingWidgetBinder::BindWidgetToBoolSetting(sif, m_ui.eeGdbStubEnable, "EmuCore", "EnableEEGDBStub", false);
+	SettingWidgetBinder::BindWidgetToIntSetting(sif, m_ui.eeGdbStubPort, "EmuCore", "EEGDBStubPort", 2345);
+	SettingWidgetBinder::BindWidgetToBoolSetting(sif, m_ui.eeGdbStubPauseOnConnect, "EmuCore", "EEGDBStubPauseOnConnect", true);
 
 	dialog()->registerWidgetHelp(m_ui.eeRoundingMode, tr("Rounding Mode"), tr("Chop/Zero (Default)"), tr("Changes how PCSX2 handles rounding while emulating the Emotion Engine's Floating Point Unit (EE FPU). "
 																										 "Because the various FPUs in the PS2 are non-compliant with international standards, some games may need different modes to do math correctly. The default value handles the vast majority of games; <b>modifying this setting when a game is not having a visible problem can cause instability.</b>"));
@@ -152,6 +155,13 @@ AdvancedSettingsWidget::AdvancedSettingsWidget(SettingsWindow* settings_dialog, 
 	dialog()->registerWidgetHelp(m_ui.backupSaveStates, tr("Create Save State Backups"), tr("Checked"),
 		//: Do not translate the ".backup" extension.
 		tr("Creates a backup copy of a save state if it already exists when the save is created. The backup copy has a .backup suffix."));
+
+	dialog()->registerWidgetHelp(m_ui.eeGdbStubEnable, tr("Enable EE GDBStub"), tr("Unchecked"),
+		tr("Starts an EE-only GDB remote debugging server while the VM is active."));
+	dialog()->registerWidgetHelp(m_ui.eeGdbStubPort, tr("EE GDBStub Port"), tr("2345"),
+		tr("TCP port used by the EE GDB remote debugging server."));
+	dialog()->registerWidgetHelp(m_ui.eeGdbStubPauseOnConnect, tr("Auto Pause On Connect"), tr("Checked"),
+		tr("Automatically pauses the VM when a debugger client connects to the EE GDBStub server."));
 }
 
 AdvancedSettingsWidget::~AdvancedSettingsWidget() = default;
